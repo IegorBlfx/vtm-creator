@@ -732,6 +732,76 @@
   }
 
   document.getElementById('btnGlossary').innerHTML = `${icon('book-open')}<span>Словник</span>`;
+
+  // ---------- Вступ: Світ Пітьми для гравців ----------
+
+  function loreBlock(block) {
+    if (block.list) return `<ul class="lore-list">${block.list.map((x) => `<li>${linkify(x)}</li>`).join('')}</ul>`;
+    if (block.quote) return `<blockquote class="lore-quote">${esc(block.quote)}${block.cite ? `<cite>${esc(block.cite)}</cite>` : ''}</blockquote>`;
+    if (block.note) return `<div class="callout">${linkify(block.note)}</div>`;
+    return `<p>${linkify(block.p)}</p>`;
+  }
+
+  function openLore(sectionId) {
+    hidePopover();
+    const lore = VTM.lore;
+    const panel = document.createElement('div');
+    panel.className = 'lore';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', lore.title);
+    panel.innerHTML = `
+      <div class="lore-bar">
+        <span class="lore-bar-title">${esc(lore.title)}</span>
+        <button type="button" class="btn" data-lore-close>Закрити</button>
+      </div>
+      <div class="lore-wrap">
+        <nav class="lore-toc" aria-label="Зміст">
+          <div class="lore-toc-title">Зміст</div>
+          ${lore.sections.map((sec) => `<a href="#lore-${sec.id}" data-lore-go="${sec.id}">${esc(sec.title)}</a>`).join('')}
+        </nav>
+        <article class="lore-body">
+          <header class="lore-hero">
+            <div class="lore-eyebrow">${esc(lore.eyebrow)}</div>
+            <h1>${esc(lore.title)}</h1>
+            <p class="lore-lead">${linkify(lore.lead)}</p>
+          </header>
+          ${lore.sections.map((sec) => `
+            <section class="lore-section" id="lore-${sec.id}">
+              <h2>${esc(sec.title)}</h2>
+              ${sec.blocks.map(loreBlock).join('')}
+              ${sec.pages ? `<div class="page-ref">Базова книга (PDF), с. ${esc(sec.pages)}</div>` : ''}
+            </section>`).join('')}
+          <footer class="lore-end">
+            <p>${esc(lore.outro)}</p>
+            <button type="button" class="btn btn-primary" data-lore-close>До створення персонажа</button>
+          </footer>
+        </article>
+      </div>`;
+    document.body.appendChild(panel);
+    document.body.classList.add('no-scroll');
+    const scroller = panel.querySelector('.lore-wrap');
+
+    function close() {
+      panel.remove();
+      document.body.classList.remove('no-scroll');
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape' && !document.querySelector('.popover:not([hidden])')) close(); }
+
+    panel.querySelectorAll('[data-lore-close]').forEach((b) => b.addEventListener('click', close));
+    panel.querySelectorAll('[data-lore-go]').forEach((a) => a.addEventListener('click', (e) => {
+      e.preventDefault();
+      panel.querySelector(`#lore-${a.dataset.loreGo}`).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+    scroller.addEventListener('scroll', hidePopover, { passive: true });
+    document.addEventListener('keydown', onKey);
+    if (sectionId) panel.querySelector(`#lore-${sectionId}`).scrollIntoView({ block: 'start' });
+    panel.querySelector('[data-lore-close]').focus();
+  }
+
+  document.getElementById('btnLore').innerHTML = `${icon('scroll-text')}<span>Світ гри</span>`;
+  document.getElementById('btnLore').addEventListener('click', () => openLore());
   document.getElementById('btnGlossary').addEventListener('click', openGlossary);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hidePopover(); });
 
@@ -782,6 +852,11 @@
       <div class="step-head">
         <h1>Оберіть клан</h1>
         <p>${termLink('clan', 'Клан')} визначає кланові дисципліни, ${termLink('bane', 'прокляття')} та ${termLink('compulsion', 'примус')} вашого вампіра. Натисніть на портрет, щоб переглянути деталі.</p>
+        <div class="lore-invite">
+          <span>${icon('scroll-text')}</span>
+          <div><b>Вперше в «Маскараді»?</b> Прочитайте короткий вступ: хто такі кревні, що таке Звір, Камарилья, анархи й Друга Інквізиція.</div>
+          <button type="button" class="btn" id="btnLoreInvite">Читати вступ</button>
+        </div>
         <button type="button" class="link-btn" id="btnImport">Завантажити персонажа з файлу</button>
         <p class="disclaimer">Неофіційний фан-інструмент для гравців. «Vampire: The Masquerade» — торгова марка Paradox Interactive AB; правила за українським перекладом базової книги 5-ї редакції.</p>
       </div>
@@ -792,6 +867,7 @@
 
     $view.querySelectorAll('[data-clan]').forEach((el) => el.addEventListener('click', () => selectClan(el.dataset.clan)));
     document.getElementById('btnImport').addEventListener('click', importCharacter);
+    document.getElementById('btnLoreInvite').addEventListener('click', () => openLore());
   }
 
   function clanDetail(c) {

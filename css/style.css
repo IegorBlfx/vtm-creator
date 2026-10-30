@@ -744,3 +744,56 @@ select.text-input { appearance: none; background-image: linear-gradient(45deg, t
 @media (max-width: 600px) {
   .form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Вступ «Світ Пітьми» ---------- */
+.lore { position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--bg); }
+.lore-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) 10px max(24px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--line); background: rgba(13, 11, 12, .94);
+}
+.lore-bar-title { font-family: var(--serif); font-size: 20px; font-weight: 700; }
+.lore-wrap {
+  flex: 1; overflow-y: auto; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 40px; align-items: start;
+  padding: 32px max(24px, env(safe-area-inset-right, 0px)) calc(48px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(900px 500px at 80% -10%, #2a0c10 0%, transparent 60%), var(--bg);
+}
+.lore-toc { position: sticky; top: 0; display: grid; gap: 2px; }
+.lore-toc-title { font: 600 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+.lore-toc a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; border-left: 2px solid transparent; font-size: 14px; }
+.lore-toc a:hover, .lore-toc a:focus-visible { color: var(--text); background: var(--surface); border-left-color: var(--blood); outline: none; }
+.lore-body { max-width: 72ch; }
+.lore-hero { padding-bottom: 20px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.lore-eyebrow { font: 600 11px var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--blood-hi); }
+.lore-hero h1 { font-size: clamp(36px, 5vw, 56px); line-height: 1.05; margin-top: 8px; text-wrap: balance; }
+.lore-lead { font-size: 18px; line-height: 1.6; color: #e3d8cf; margin: 14px 0 0; }
+.lore-section { padding-top: 28px; scroll-margin-top: 16px; }
+.lore-section h2 { font-size: 32px; margin-bottom: 10px; text-wrap: balance; }
+.lore-section p { font-size: 16px; line-height: 1.7; color: #ddd2c9; margin: 0 0 12px; }
+.lore-list { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 6px; font-size: 16px; line-height: 1.6; color: #ddd2c9; }
+.lore-list li::marker { color: var(--blood-hi); }
+.lore-quote { margin: 16px 0; padding: 10px 18px; border-left: 3px solid var(--blood); font-family: var(--serif); font-size: 20px; font-style: italic; color: var(--text); }
+.lore-quote cite { display: block; margin-top: 6px; font: normal 12px var(--sans); color: var(--muted); }
+.lore-section .callout { margin: 4px 0 12px; }
+.lore-end { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.lore-end p { margin: 0; color: var(--muted); max-width: 50ch; }
+.lore-invite {
+  display: flex; align-items: center; gap: 14px; margin-top: 14px; padding: 12px 16px; max-width: 760px;
+  border-radius: var(--radius); border: 1px solid rgba(201, 164, 106, .35); background: rgba(201, 164, 106, .07);
+}
+.lore-invite > span { color: var(--gold); flex: none; }
+.lore-invite > span svg { width: 26px; height: 26px; }
+.lore-invite > div { flex: 1; font-size: 14px; color: #e4d8c8; }
+.lore-invite .btn { flex: none; }
+@media (max-width: 800px) {
+  .lore-wrap { grid-template-columns: 1fr; gap: 16px; padding-top: 20px; }
+  .lore-toc { position: static; display: flex; flex-wrap: wrap; gap: 6px; }
+  .lore-toc-title { width: 100%; }
+  .lore-toc a { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+  .lore-invite { flex-wrap: wrap; }
+}
+@media (max-width: 600px) {
+  .lore-bar, .lore-wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .lore-section h2 { font-size: 27px; }
+  .lore-lead { font-size: 17px; }
+}
