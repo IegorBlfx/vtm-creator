@@ -742,6 +742,15 @@
     return `<p>${linkify(block.p)}</p>`;
   }
 
+  // Ілюстрація вступу: вбудована збіркою або з img/lore; якщо файлу немає — блок зникає
+  function loreFigure(id, cls) {
+    const embedded = window.VTM_LORE_ART && window.VTM_LORE_ART[id];
+    if (window.VTM_NO_ART && !embedded) return '';
+    const src = embedded || `img/lore/${id}.jpg`;
+    // Рамка прихована, доки картинка не завантажиться: відсутні файли не лишають порожніх місць
+    return `<figure class="${cls} is-pending"><img src="${src}" alt="" data-lore-img></figure>`;
+  }
+
   function openLore(sectionId) {
     hidePopover();
     const lore = VTM.lore;
@@ -762,6 +771,7 @@
         </nav>
         <article class="lore-body">
           <header class="lore-hero">
+            ${loreFigure('hero', 'lore-cover')}
             <div class="lore-eyebrow">${esc(lore.eyebrow)}</div>
             <h1>${esc(lore.title)}</h1>
             <p class="lore-lead">${linkify(lore.lead)}</p>
@@ -769,6 +779,7 @@
           ${lore.sections.map((sec) => `
             <section class="lore-section" id="lore-${sec.id}">
               <h2>${esc(sec.title)}</h2>
+              ${loreFigure(sec.id, 'lore-figure')}
               ${sec.blocks.map(loreBlock).join('')}
               ${sec.pages ? `<div class="page-ref">Базова книга (PDF), с. ${esc(sec.pages)}</div>` : ''}
             </section>`).join('')}
@@ -821,8 +832,16 @@
 
   // Портрета немає: спершу пробуємо ілюстрацію з книги (є лише в локальній копії), далі — заглушка.
   // Слухач замість inline onerror, щоб працювало під суворою CSP на сайті.
+  document.addEventListener('load', (e) => {
+    const img = e.target;
+    if (img instanceof HTMLImageElement && img.dataset.loreImg !== undefined) img.closest('figure').classList.remove('is-pending');
+  }, true);
   document.addEventListener('error', (e) => {
     const img = e.target;
+    if (img instanceof HTMLImageElement && img.dataset.loreImg !== undefined) {
+      img.closest('figure').remove();
+      return;
+    }
     if (!(img instanceof HTMLImageElement) || !img.dataset.artClan) return;
     const clan = clanById(img.dataset.artClan);
     if (!img.dataset.triedBook) {

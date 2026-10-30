@@ -797,3 +797,21 @@ select.text-input { appearance: none; background-image: linear-gradient(45deg, t
   .lore-section h2 { font-size: 27px; }
   .lore-lead { font-size: 17px; }
 }
+
+/* ---------- Ілюстрації вступу ---------- */
+.lore-cover {
+  position: relative; margin: 0 0 22px; border-radius: var(--radius); overflow: hidden;
+  aspect-ratio: 16 / 9; max-width: 100%; border: 1px solid var(--line); background: var(--surface);
+}
+.lore-cover::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(13, 11, 12, .85), transparent 55%); pointer-events: none; }
+.lore-cover img, .lore-figure img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.lore-figure {
+  margin: 4px 0 16px; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; max-width: 100%;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.lore-figure img { filter: saturate(.9); transition: transform .6s ease, filter .6s ease; }
+.lore-figure:hover img { transform: scale(1.02); filter: saturate(1); }
+@media (prefers-reduced-motion: reduce) {
+  .lore-figure img, .lore-figure:hover img { transition: none; transform: none; }
+}
+.lore-cover.is-pending, .lore-figure.is-pending { display: none; }
