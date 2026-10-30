@@ -1,5 +1,6 @@
-// Генеративний темний ембієнт на Web Audio API — без аудіофайлів і ліцензій.
-// Шари: низький гул із «диханням» фільтра, повільні мінорні акорди, дощ, рідкі дзвони й далеке серцебиття.
+// Генеративна темна музика на Web Audio API — без аудіофайлів і ліцензій.
+// Шари: низький гул із «диханням» фільтра, мінорні акорди, тихий дощ, дзвони, далеке серцебиття
+// і темний електронний біт (бочка, клеп, хети, пульсуючий бас), синхронізований з акордами.
 // Браузери дозволяють звук лише після дії користувача, тому start() викликається з кліку.
 window.VTM = window.VTM || {};
 
@@ -7,17 +8,29 @@ VTM.ambient = (function () {
   'use strict';
 
   const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
-  // Ре мінор: Dm – B♭ – Gm – A
+  // Ре мінор: Dm – B♭ – Gm – A, кожен акорд тримається 4 такти
   const CHORDS = [[50, 53, 57], [46, 50, 53], [43, 50, 55], [45, 49, 52]];
   const BELL_NOTES = [74, 77, 79, 81, 84, 86];
   const MASTER_LEVEL = 0.25; // тихий фон: ~ −26 dBFS RMS
+  const BPM = 96;
+  const STEP = 60 / BPM / 4; // шістнадцята
+  const BARS_PER_CHORD = 4;
+  const BEAT_LEVEL = 0.8;
+
+  // Візерунок такту з 16 кроків
+  const KICK = [0, 6, 8];
+  const CLAP = [4, 12];
+  const HAT = [2, 6, 10, 14];
+  const HAT_SOFT = [1, 3, 5, 7, 9, 11, 13, 15];
+  const BASS = [0, 3, 6, 8, 11, 14];
 
   let ctx = null;
-  let master = null;
-  let reverb = null;
+  let nodes = null;
   let timers = [];
-  let chordIndex = 0;
   let playing = false;
+  let nextStepTime = 0;
+  let stepIndex = 0;
+  let scheduler = null;
 
   const rand = (min, max) => min + Math.random() * (max - min);
 
@@ -33,7 +46,7 @@ VTM.ambient = (function () {
   }
 
   // «Рожевий» шум для дощу (м'якший за білий)
-  function noise(c, seconds) {
+  function pinkNoise(c, seconds) {
     const len = Math.floor(c.sampleRate * seconds);
     const buf = c.createBuffer(1, len, c.sampleRate);
     const d = buf.getChannelData(0);
@@ -48,21 +61,30 @@ VTM.ambient = (function () {
     return buf;
   }
 
+  // Короткий білий шум для хетів і клепа
+  function whiteNoise(c, seconds) {
+    const len = Math.floor(c.sampleRate * seconds);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
   // Будує постійні шари в контексті c (живому або офлайн для перевірки)
   function build(c) {
     const out = c.createDynamicsCompressor();
     out.threshold.value = -18;
     out.ratio.value = 3;
     out.connect(c.destination);
-    const m = c.createGain();
-    m.gain.value = 0;
-    m.connect(out);
-    const rv = c.createConvolver();
-    rv.buffer = impulse(c, 5, 3);
+    const master = c.createGain();
+    master.gain.value = 0;
+    master.connect(out);
+    const reverb = c.createConvolver();
+    reverb.buffer = impulse(c, 5, 3);
     const wet = c.createGain();
     wet.gain.value = 0.55;
-    rv.connect(wet);
-    wet.connect(m);
+    reverb.connect(wet);
+    wet.connect(master);
 
     // Гул: дві розстроєні пилки на ре та синусоїдальний суббас, повільно «дихає» фільтр
     const droneFilter = c.createBiquadFilter();
@@ -70,10 +92,10 @@ VTM.ambient = (function () {
     droneFilter.frequency.value = 260;
     droneFilter.Q.value = 1.5;
     const droneGain = c.createGain();
-    droneGain.gain.value = 0.16;
+    droneGain.gain.value = 0.13;
     droneFilter.connect(droneGain);
-    droneGain.connect(m);
-    droneGain.connect(rv);
+    droneGain.connect(master);
+    droneGain.connect(reverb);
     [[midi(38), 'sawtooth', -7], [midi(38), 'sawtooth', 6], [midi(26), 'sine', 0]].forEach(([freq, type, detune]) => {
       const o = c.createOscillator();
       o.type = type;
@@ -90,36 +112,45 @@ VTM.ambient = (function () {
     lfoDepth.connect(droneFilter.frequency);
     lfo.start();
 
-    // Дощ: відфільтрований рожевий шум, гучність повільно хвилюється
+    // Дощ: тихий відфільтрований рожевий шум
     const rain = c.createBufferSource();
-    rain.buffer = noise(c, 6);
+    rain.buffer = pinkNoise(c, 6);
     rain.loop = true;
     const hp = c.createBiquadFilter();
     hp.type = 'highpass';
-    hp.frequency.value = 900;
+    hp.frequency.value = 1100;
     const lp = c.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 5500;
+    lp.frequency.value = 5000;
     const rainGain = c.createGain();
-    rainGain.gain.value = 0.09;
+    rainGain.gain.value = 0.03;
     const rainLfo = c.createOscillator();
     rainLfo.frequency.value = 0.07;
     const rainDepth = c.createGain();
-    rainDepth.gain.value = 0.03;
+    rainDepth.gain.value = 0.01;
     rainLfo.connect(rainDepth);
     rainDepth.connect(rainGain.gain);
     rain.connect(hp);
     hp.connect(lp);
     lp.connect(rainGain);
-    rainGain.connect(m);
+    rainGain.connect(master);
     rain.start();
     rainLfo.start();
 
-    return { master: m, reverb: rv };
+    // Шина біту: окрема гучність, щоб біт входив плавно
+    const beat = c.createGain();
+    beat.gain.value = 0;
+    beat.connect(master);
+    const beatVerb = c.createGain();
+    beatVerb.gain.value = 0.25;
+    beat.connect(beatVerb);
+    beatVerb.connect(reverb);
+
+    return { master, reverb, beat, noise: whiteNoise(c, 1) };
   }
 
   // Акорд із повільним наростанням і згасанням
-  function pad(c, m, rv, chord, when, dur) {
+  function pad(c, n, chord, when, dur) {
     chord.forEach((note) => {
       [-6, 6].forEach((detune) => {
         const o = c.createOscillator();
@@ -131,22 +162,22 @@ VTM.ambient = (function () {
         f.frequency.value = 850;
         const g = c.createGain();
         g.gain.setValueAtTime(0, when);
-        g.gain.linearRampToValueAtTime(0.03, when + dur * 0.4);
+        g.gain.linearRampToValueAtTime(0.03, when + dur * 0.35);
         g.gain.linearRampToValueAtTime(0, when + dur);
         o.connect(f);
         f.connect(g);
-        g.connect(m);
-        g.connect(rv);
+        g.connect(n.master);
+        g.connect(n.reverb);
         o.start(when);
         o.stop(when + dur + 0.1);
       });
     });
   }
 
-  // Далекий дзвін: основний тон і негармонійний обертон, переважно в реверберацію
-  function bell(c, m, rv, when) {
+  // Дзвін: основний тон і негармонійний обертон, переважно в реверберацію
+  function bell(c, n, when) {
     const freq = midi(BELL_NOTES[Math.floor(Math.random() * BELL_NOTES.length)]);
-    [[1, 0.05], [2.76, 0.015]].forEach(([ratio, level]) => {
+    [[1, 0.07], [2.76, 0.02]].forEach(([ratio, level]) => {
       const o = c.createOscillator();
       o.type = 'sine';
       o.frequency.value = freq * ratio;
@@ -155,15 +186,15 @@ VTM.ambient = (function () {
       g.gain.linearRampToValueAtTime(level, when + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, when + 4.5);
       o.connect(g);
-      g.connect(rv);
-      g.connect(m);
+      g.connect(n.reverb);
+      g.connect(n.master);
       o.start(when);
       o.stop(when + 4.6);
     });
   }
 
   // Серцебиття: два глухі удари з падінням висоти
-  function heartbeat(c, m, when) {
+  function heartbeat(c, n, when) {
     [0, 0.32].forEach((offset, i) => {
       const t = when + offset;
       const o = c.createOscillator();
@@ -175,13 +206,90 @@ VTM.ambient = (function () {
       g.gain.linearRampToValueAtTime(i ? 0.16 : 0.22, t + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
       o.connect(g);
-      g.connect(m);
+      g.connect(n.master);
       o.start(t);
       o.stop(t + 0.35);
     });
   }
 
-  // Живе планування подій через таймери
+  // ---------- Біт ----------
+
+  function kick(c, n, t) {
+    const o = c.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(110, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.55, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.connect(g);
+    g.connect(n.beat);
+    o.start(t);
+    o.stop(t + 0.45);
+  }
+
+  function noiseHit(c, n, t, opts) {
+    const src = c.createBufferSource();
+    src.buffer = n.noise;
+    const f = c.createBiquadFilter();
+    f.type = opts.type;
+    f.frequency.value = opts.freq;
+    f.Q.value = opts.q || 0.8;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(opts.level, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + opts.decay);
+    src.connect(f);
+    f.connect(g);
+    g.connect(n.beat);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + opts.decay + 0.05);
+  }
+
+  // Бас: коротка пилка на тоніці акорду октавою нижче, з «клацанням» фільтра
+  function bass(c, n, t, note) {
+    const o = c.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.value = midi(note);
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.Q.value = 6;
+    f.frequency.setValueAtTime(900, t);
+    f.frequency.exponentialRampToValueAtTime(160, t + 0.18);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    o.connect(f);
+    f.connect(g);
+    g.connect(n.beat);
+    o.start(t);
+    o.stop(t + 0.28);
+  }
+
+  // Один крок секвенсора (шістнадцята); на початку кожних 4 тактів — новий акорд
+  function playStep(c, n, step, t) {
+    const inBar = step % 16;
+    const bar = Math.floor(step / 16);
+    const chord = CHORDS[Math.floor(bar / BARS_PER_CHORD) % CHORDS.length];
+    if (inBar === 0 && bar % BARS_PER_CHORD === 0) pad(c, n, chord, t, BARS_PER_CHORD * 16 * STEP + 2);
+    if (KICK.includes(inBar)) kick(c, n, t);
+    if (CLAP.includes(inBar)) noiseHit(c, n, t, { type: 'bandpass', freq: 1500, q: 1.2, level: 0.22, decay: 0.18 });
+    if (HAT.includes(inBar)) noiseHit(c, n, t, { type: 'highpass', freq: 7500, level: 0.09, decay: 0.07 });
+    else if (HAT_SOFT.includes(inBar)) noiseHit(c, n, t, { type: 'highpass', freq: 9000, level: 0.03, decay: 0.04 });
+    if (BASS.includes(inBar)) bass(c, n, t, chord[0] - 12);
+  }
+
+  // Планувальник з упередженням: таймер не точний, тож ноти ставимо наперед за годинником аудіо
+  function schedule() {
+    while (nextStepTime < ctx.currentTime + 0.12) {
+      playStep(ctx, nodes, stepIndex, nextStepTime);
+      nextStepTime += STEP;
+      stepIndex++;
+    }
+  }
+
   function loop(fn, minS, maxS) {
     const tick = () => {
       if (!playing) return;
@@ -192,19 +300,24 @@ VTM.ambient = (function () {
   }
 
   function startLoops() {
-    pad(ctx, master, reverb, CHORDS[chordIndex], ctx.currentTime + 0.1, 15);
-    timers.push(setInterval(() => {
-      if (!playing) return;
-      chordIndex = (chordIndex + 1) % CHORDS.length;
-      pad(ctx, master, reverb, CHORDS[chordIndex], ctx.currentTime + 0.1, 15);
-    }, 12000));
-    loop(() => bell(ctx, master, reverb, ctx.currentTime + 0.05), 6, 13);
-    loop(() => heartbeat(ctx, master, ctx.currentTime + 0.05), 18, 32);
+    nextStepTime = ctx.currentTime + 0.1;
+    stepIndex = 0;
+    scheduler = setInterval(schedule, 25);
+    loop(() => bell(ctx, nodes, ctx.currentTime + 0.05), 2.5, 6);
+    loop(() => heartbeat(ctx, nodes, ctx.currentTime + 0.05), 18, 32);
   }
 
   function clearLoops() {
-    timers.forEach((t) => { clearTimeout(t); clearInterval(t); });
+    clearInterval(scheduler);
+    timers.forEach((t) => clearTimeout(t));
     timers = [];
+  }
+
+  function fade(param, to, seconds) {
+    const now = ctx.currentTime;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.linearRampToValueAtTime(to, now + seconds);
   }
 
   async function start() {
@@ -213,16 +326,14 @@ VTM.ambient = (function () {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       ctx = new Ctx();
-      const graph = build(ctx);
-      master = graph.master;
-      reverb = graph.reverb;
+      nodes = build(ctx);
     }
     await ctx.resume();
     playing = true;
-    const now = ctx.currentTime;
-    master.gain.cancelScheduledValues(now);
-    master.gain.setValueAtTime(master.gain.value, now);
-    master.gain.linearRampToValueAtTime(MASTER_LEVEL, now + 3);
+    fade(nodes.master.gain, MASTER_LEVEL, 3);
+    // Біт входить поступово, за кілька тактів
+    nodes.beat.gain.setValueAtTime(0, ctx.currentTime);
+    nodes.beat.gain.linearRampToValueAtTime(BEAT_LEVEL, ctx.currentTime + 10);
     startLoops();
   }
 
@@ -230,22 +341,19 @@ VTM.ambient = (function () {
     if (!ctx || !playing) return;
     playing = false;
     clearLoops();
-    const now = ctx.currentTime;
-    master.gain.cancelScheduledValues(now);
-    master.gain.setValueAtTime(master.gain.value, now);
-    master.gain.linearRampToValueAtTime(0, now + 1.5);
+    fade(nodes.master.gain, 0, 1.5);
     setTimeout(() => { if (!playing) ctx.suspend(); }, 1600);
   }
 
   // Офлайн-рендер кількох секунд для перевірки рівнів (без відтворення)
   async function renderPreview(seconds) {
     const c = new OfflineAudioContext(2, Math.floor(44100 * seconds), 44100);
-    const graph = build(c);
-    graph.master.gain.setValueAtTime(MASTER_LEVEL, 0);
-    pad(c, graph.master, graph.reverb, CHORDS[0], 0.1, 15);
-    bell(c, graph.master, graph.reverb, 2);
-    heartbeat(c, graph.master, 4);
-    bell(c, graph.master, graph.reverb, 6);
+    const n = build(c);
+    n.master.gain.setValueAtTime(MASTER_LEVEL, 0);
+    n.beat.gain.setValueAtTime(BEAT_LEVEL, 0);
+    for (let step = 0, t = 0.05; t < seconds; step++, t += STEP) playStep(c, n, step, t);
+    for (let t = 1; t < seconds; t += 4) bell(c, n, t);
+    heartbeat(c, n, 5);
     return c.startRendering();
   }
 
