@@ -815,7 +815,8 @@
 
   const MUSIC_KEY = 'vtm5-music';
   const btnMusic = document.getElementById('btnMusic');
-  const musicPref = () => { try { return localStorage.getItem(MUSIC_KEY) === 'on'; } catch (e) { return false; } };
+  // Музика ввімкнена за замовчуванням; вимикається лише явним вибором гравця
+  const musicPref = () => { try { return localStorage.getItem(MUSIC_KEY) !== 'off'; } catch (e) { return true; } };
   const setMusicPref = (on) => { try { localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off'); } catch (e) { /* ignore */ } };
 
   function renderMusicBtn() {
@@ -839,17 +840,15 @@
       }
       renderMusicBtn();
     });
-    // Браузери не дають сайту вмикати звук самостійно: якщо гравець раніше ввімкнув музику,
-    // запускаємо її з першою його дією на сторінці
+    // Браузери не дають сайту вмикати звук самостійно, тож музика стартує з першою дією гравця
+    // на сторінці — якщо він раніше її не вимкнув
     if (musicPref()) {
       const kick = (e) => {
         if (btnMusic.contains(e.target)) return;
-        document.removeEventListener('pointerdown', kick, true);
-        document.removeEventListener('keydown', kick, true);
+        ['pointerdown', 'keydown', 'touchstart'].forEach((type) => document.removeEventListener(type, kick, true));
         if (!VTM.ambient.isPlaying()) VTM.ambient.start().then(renderMusicBtn);
       };
-      document.addEventListener('pointerdown', kick, true);
-      document.addEventListener('keydown', kick, true);
+      ['pointerdown', 'keydown', 'touchstart'].forEach((type) => document.addEventListener(type, kick, true));
     }
     // На прихованій вкладці музика стає на паузу
     let resumeOnVisible = false;
