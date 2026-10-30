@@ -811,6 +811,59 @@
     panel.querySelector('[data-lore-close]').focus();
   }
 
+  // ---------- Фонова музика (генеративний ембієнт, js/ambient.js) ----------
+
+  const MUSIC_KEY = 'vtm5-music';
+  const btnMusic = document.getElementById('btnMusic');
+  const musicPref = () => { try { return localStorage.getItem(MUSIC_KEY) === 'on'; } catch (e) { return false; } };
+  const setMusicPref = (on) => { try { localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off'); } catch (e) { /* ignore */ } };
+
+  function renderMusicBtn() {
+    const on = VTM.ambient.isPlaying();
+    btnMusic.innerHTML = `${icon(on ? 'music' : 'volume-x')}<span>Музика</span>`;
+    btnMusic.classList.toggle('is-on', on);
+    btnMusic.setAttribute('aria-pressed', String(on));
+    btnMusic.title = on ? 'Вимкнути фонову музику' : 'Увімкнути фонову музику';
+  }
+
+  if (VTM.ambient && VTM.ambient.supported) {
+    btnMusic.hidden = false;
+    renderMusicBtn();
+    btnMusic.addEventListener('click', async () => {
+      if (VTM.ambient.isPlaying()) {
+        VTM.ambient.stop();
+        setMusicPref(false);
+      } else {
+        await VTM.ambient.start();
+        setMusicPref(true);
+      }
+      renderMusicBtn();
+    });
+    // Браузери не дають сайту вмикати звук самостійно: якщо гравець раніше ввімкнув музику,
+    // запускаємо її з першою його дією на сторінці
+    if (musicPref()) {
+      const kick = (e) => {
+        if (btnMusic.contains(e.target)) return;
+        document.removeEventListener('pointerdown', kick, true);
+        document.removeEventListener('keydown', kick, true);
+        if (!VTM.ambient.isPlaying()) VTM.ambient.start().then(renderMusicBtn);
+      };
+      document.addEventListener('pointerdown', kick, true);
+      document.addEventListener('keydown', kick, true);
+    }
+    // На прихованій вкладці музика стає на паузу
+    let resumeOnVisible = false;
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && VTM.ambient.isPlaying()) {
+        resumeOnVisible = true;
+        VTM.ambient.stop();
+      } else if (!document.hidden && resumeOnVisible) {
+        resumeOnVisible = false;
+        VTM.ambient.start().then(renderMusicBtn);
+      }
+    });
+  }
+
   document.getElementById('btnLore').innerHTML = `${icon('scroll-text')}<span>Світ гри</span>`;
   document.getElementById('btnLore').addEventListener('click', () => openLore());
   document.getElementById('btnGlossary').addEventListener('click', openGlossary);

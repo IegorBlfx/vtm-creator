@@ -815,3 +815,17 @@ select.text-input { appearance: none; background-image: linear-gradient(45deg, t
   .lore-figure img, .lore-figure:hover img { transition: none; transform: none; }
 }
 .lore-cover.is-pending, .lore-figure.is-pending { display: none; }
+
+/* ---------- Кнопка музики ---------- */
+.btn-music.is-on { border-color: var(--blood); color: var(--text); }
+.btn-music.is-on svg { color: var(--blood-hi); animation: music-pulse 2.4s ease-in-out infinite; }
+@keyframes music-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .btn-music.is-on svg { animation: none; } }
+@media (max-width: 1000px) {
+  .btn-glossary + .btn-glossary { margin-left: 0; }
+}
+@media (max-width: 600px) {
+  .topbar { gap: 8px; }
+  .brand-sub { display: none; }
+  .brand-title { font-size: 19px; }
+}
